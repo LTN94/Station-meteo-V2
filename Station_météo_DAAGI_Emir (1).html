@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Station Météo — Observer le Ciel</title>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=DM+Mono:wght@300;400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --sky-deep:    #27640b;
+      --sky-mid:     #112244;
+      --sky-horizon: #1a3a6e;
+      --cloud-light: #c9ddf0;
+      --sun-gold:    #f0c060;
+      --rain-blue:   #5ba3d9;
+      --accent:      #78c0f8;
+      --mist:        rgba(120,192,248,0.12);
+      --text-main:   #e8f2fc;
+      --text-soft:   #8fb8d8;
+      --text-dim:    #4d7a9f;
+      --card-bg:     rgba(17,34,68,0.72);
+      --card-border: rgba(120,192,248,0.18);
+      --glow:        rgba(120,192,248,0.25);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--sky-deep);
+      color: var(--text-main);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ── SKY CANVAS ── */
+    #sky-canvas {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    /* ── LAYOUT ── */
+    main { position: relative; z-index: 1; }
+
+    /* ── HERO ── */
+    .hero {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 4rem 2rem 6rem;
+      position: relative;
+    }
+
+    .hero-eyebrow {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.75rem;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 1.5rem;
+      opacity: 0;
+      animation: fadeUp 0.8s 0.2s ease forwards;
+    }
+
+    .hero-title {
+      font-family: 'Playfair Display', serif;
+      font-size: clamp(3rem, 9vw, 7rem);
+      line-height: 1.05;
+      font-weight: 700;
+      background: linear-gradient(135deg, #e8f2fc 30%, var(--accent) 70%, var(--sun-gold) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      opacity: 0;
+      animation: fadeUp 0.8s 0.4s ease forwards;
+    }
+
+    .hero-sub {
+      font-family: 'Playfair Display', serif;
+      font-style: italic;
+      font-size: clamp(1rem, 2.5vw, 1.4rem);
+      color: var(--text-soft);
+      margin-top: 1.2rem;
+      max-width: 560px;
+      opacity: 0;
+      animation: fadeUp 0.8s 0.6s ease forwards;
+    }
+
+    .hero-scroll {
+      position: absolute;
+      bottom: 2.5rem;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.5rem;
+      opacity: 0;
+      animation: fadeUp 0.8s 1.2s ease forwards;
+    }
+    .hero-scroll span {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.65rem;
+      letter-spacing: 0.2em;
+      color: var(--text-dim);
+      text-transform: uppercase;
+    }
+    .scroll-line {
+      width: 1px;
+      height: 40px;
+      background: linear-gradient(to bottom, var(--accent), transparent);
+      animation: scrollPulse 2s infinite;
+    }
+
+    /* ── INSTRUMENT BAR ── */
+    .instrument-bar {
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 1px;
+      background: var(--card-border);
+      border-top: 1px solid var(--card-border);
+      border-bottom: 1px solid var(--card-border);
+      opacity: 0;
+      animation: fadeUp 0.8s 0.9s ease forwards;
+    }
+    .instr-item {
+      background: var(--card-bg);
+      backdrop-filter: blur(16px);
+      padding: 1.4rem 2.5rem;
+      text-align: center;
+      flex: 1;
+      min-width: 140px;
+    }
+    .instr-value {
+      font-family: 'DM Mono', monospace;
+      font-size: 2rem;
+      font-weight: 400;
+      color: var(--accent);
+      display: block;
+    }
+    .instr-unit {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.7rem;
+      color: var(--text-dim);
+      letter-spacing: 0.1em;
+    }
+    .instr-label {
+      font-size: 0.78rem;
+      color: var(--text-soft);
+      margin-top: 0.2rem;
+      letter-spacing: 0.05em;
+    }
+
+    /* ── SECTIONS ── */
+    section {
+      padding: 6rem 2rem;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    .section-tag {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.7rem;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 1rem;
+    }
+
+    .section-title {
+      font-family: 'Playfair Display', serif;
+      font-size: clamp(2rem, 5vw, 3.2rem);
+      line-height: 1.15;
+      margin-bottom: 1.5rem;
+    }
+
+    .section-title em {
+      font-style: italic;
+      color: var(--sun-gold);
+    }
+
+    .section-body {
+      font-size: 1.05rem;
+      color: var(--text-soft);
+      line-height: 1.8;
+      max-width: 680px;
+    }
+
+    /* ── SOURCE TOGGLE (API vs NUCLEO) ── */
+    .source-toggle {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.8rem;
+      margin-top: 2rem;
+    }
+    .source-btn {
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: var(--text-soft);
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 999px;
+      padding: 0.7rem 1.4rem;
+      cursor: pointer;
+      backdrop-filter: blur(12px);
+      transition: all 0.25s ease;
+    }
+    .source-btn:hover {
+      border-color: var(--accent);
+      color: var(--text-main);
+    }
+    .source-btn.active {
+      background: linear-gradient(135deg, var(--sky-horizon), var(--accent));
+      color: #0a1628;
+      border-color: var(--accent);
+      box-shadow: 0 0 20px var(--glow);
+      font-weight: 600;
+    }
+
+    .geo-status {
+      margin-top: 1.2rem;
+      font-family: 'DM Mono', monospace;
+      font-size: 0.8rem;
+      color: var(--text-dim);
+      letter-spacing: 0.03em;
+    }
+
+    /* ── NUCLEO PANEL ── */
+    .nucleo-panel {
+      margin-top: 2.5rem;
+      padding: 2rem;
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      background: var(--card-bg);
+      backdrop-filter: blur(16px);
+    }
+    .nucleo-panel-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.15rem;
+      color: var(--text-main);
+      margin-bottom: 0.8rem;
+    }
+    .nucleo-panel-desc {
+      font-size: 0.88rem;
+      color: var(--text-soft);
+      line-height: 1.7;
+      max-width: 640px;
+    }
+    .nucleo-panel-desc code {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.78rem;
+      color: var(--sun-gold);
+      background: rgba(240,192,96,0.08);
+      padding: 0.1rem 0.4rem;
+      border-radius: 4px;
+    }
+    .nucleo-actions {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-top: 1.4rem;
+      flex-wrap: wrap;
+    }
+    .nucleo-conn-status {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.78rem;
+      color: var(--text-dim);
+    }
+    .nucleo-conn-status.connected {
+      color: #7be0a0;
+    }
+    .nucleo-fallback-note {
+      margin-top: 1.6rem;
+      font-size: 0.82rem;
+      color: var(--text-dim);
+    }
+    .nucleo-manual-grid {
+      margin-top: 1rem;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 1rem;
+    }
+    .nucleo-manual-grid label {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+      font-size: 0.75rem;
+      color: var(--text-soft);
+      font-family: 'DM Mono', monospace;
+      letter-spacing: 0.03em;
+    }
+    .nucleo-manual-grid input {
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.9rem;
+      color: var(--text-main);
+      background: rgba(120,192,248,0.06);
+      border: 1px solid var(--card-border);
+      border-radius: 6px;
+      padding: 0.6rem 0.8rem;
+    }
+    .nucleo-manual-grid input:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    /* ── DIVIDER ── */
+    .divider {
+      border: none;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--card-border), transparent);
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    /* ── HISTORY ── */
+    .timeline {
+      margin-top: 3rem;
+      position: relative;
+      padding-left: 2rem;
+    }
+    .timeline::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 0; bottom: 0;
+      width: 1px;
+      background: linear-gradient(to bottom, var(--accent), transparent);
+    }
+    .timeline-item {
+      position: relative;
+      margin-bottom: 2.5rem;
+      padding-left: 1.5rem;
+    }
+    .timeline-item::before {
+      content: '';
+      position: absolute;
+      left: -2.35rem;
+      top: 0.4rem;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 10px var(--accent);
+    }
+    .timeline-year {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.75rem;
+      color: var(--accent);
+      letter-spacing: 0.1em;
+      margin-bottom: 0.3rem;
+    }
+    .timeline-text {
+      font-size: 0.95rem;
+      color: var(--text-soft);
+      line-height: 1.65;
+    }
+    .timeline-text strong { color: var(--text-main); font-weight: 500; }
+
+    /* ── FOOTER ── */
+    footer {
+      border-top: 1px solid var(--card-border);
+      padding: 3rem 2rem;
+      text-align: center;
+      color: var(--text-dim);
+      font-size: 0.82rem;
+      font-family: 'DM Mono', monospace;
+      letter-spacing: 0.05em;
+    }
+
+    /* ── ANIMATIONS ── */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes scrollPulse {
+      0%, 100% { opacity: 0.4; transform: scaleY(1); }
+      50%       { opacity: 1;   transform: scaleY(1.15); }
+    }
+    @keyframes float {
+      0%, 100% { transform: translateY(0); }
+      50%       { transform: translateY(-10px); }
+    }
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to   { transform: rotate(360deg); }
+    }
+
+    .float { animation: float 5s ease-in-out infinite; }
+
+    /* ── SCROLL REVEAL ── */
+    .reveal {
+      opacity: 0;
+      transform: translateY(30px);
+      transition: opacity 0.7s ease, transform 0.7s ease;
+    }
+    .reveal.visible { opacity: 1; transform: translateY(0); }
+
+    /* ── ANIMATED COUNTER ── */
+    [data-count] { display: inline-block; }
+  </style>
+</head>
+<body>
+
+<canvas id="sky-canvas"></canvas>
+
+<main>
+
+  <!-- ══ HERO ══ -->
+  <div class="hero">
+    <p class="hero-eyebrow">Météorologie &amp; Climatologie</p>
+    <h1 class="hero-title">Station<br/>Météo<br/>Connectée</h1>
+    <p class="hero-sub">Projet créé par DAAGI Emir.</p>
+    <div class="hero-scroll">
+      <div class="scroll-line"></div>
+      <span>     </span>
+    </div>
+  </div>
+
+  <!-- ══ INSTRUMENT BAR ══ -->
+  <div class="instrument-bar">
+    <div class="instr-item">
+      <span class="instr-value" id="cnt-temp">—</span>
+      <span class="instr-unit">°C</span>
+      <p class="instr-label">Température</p>
+    </div>
+    <div class="instr-item">
+      <span class="instr-value" id="cnt-hum">—</span>
+      <span class="instr-unit">%</span>
+      <p class="instr-label">Humidité</p>
+    </div>
+    <div class="instr-item">
+      <span class="instr-value" id="cnt-press">—</span>
+      <span class="instr-unit">hPa</span>
+      <p class="instr-label">Pression</p>
+    </div>
+    <div class="instr-item">
+      <span class="instr-value" id="cnt-wind">—</span>
+      <span class="instr-unit">km/h</span>
+      <p class="instr-label">Vent</p>
+    </div>
+    <div class="instr-item">
+      <span class="instr-value" id="cnt-prec">—</span>
+      <span class="instr-unit">mm</span>
+      <p class="instr-label">Précipitations</p>
+    </div>
+  </div>
+
+  <hr class="divider" style="margin-top:0;" />
+
+  <!-- ══ SOURCE DES DONNÉES ══ -->
+  <section style="padding-top:4rem; padding-bottom:3rem;">
+    <p class="section-tag reveal">Source des données</p>
+    <h2 class="section-title reveal">Géolocalisation<br/><em>en temps réel</em></h2>
+    <p class="section-body reveal">
+      Les mesures ci-dessus sont synchronisées avec votre position grâce à la géolocalisation
+      du navigateur, et interrogent l'API météo en direct. Vous pouvez aussi basculer sur les
+      mesures envoyées par la carte <strong style="color:var(--text-main)">NUCLEO-L476RG</strong> branchée en local.
+    </p>
+
+    <div class="source-toggle reveal">
+      <button id="btn-source-api" class="source-btn active" type="button">🌍 Météo réelle (géolocalisée)</button>
+      <button id="btn-source-nucleo" class="source-btn" type="button">🔌 Carte NUCLEO-L476RG</button>
+    </div>
+
+    <p id="geo-status" class="geo-status reveal">Localisation en cours…</p>
+
+    <!-- Panneau de connexion série Nucleo, masqué par défaut -->
+    <div id="nucleo-panel" class="nucleo-panel reveal" hidden>
+      <p class="nucleo-panel-title">Connexion à la carte (Web Serial)</p>
+      <p class="nucleo-panel-desc">
+        Branchez la NUCLEO-L476RG en USB, flashez-la avec un firmware qui envoie une ligne
+        <code>JSON</code> par mesure sur le port série (ex. via VitaScience), puis cliquez sur connecter.
+        Format attendu : <code>{"temp":21.4,"hum":55,"press":1014,"wind":12,"prec":0}</code>
+      </p>
+      <div class="nucleo-actions">
+        <button id="btn-nucleo-connect" class="source-btn" type="button">🔗 Connecter la carte</button>
+        <span id="nucleo-conn-status" class="nucleo-conn-status">Non connectée</span>
+      </div>
+      <p class="nucleo-fallback-note">
+        Navigateur non compatible Web Serial (Chrome/Edge requis) ? Vous pouvez aussi saisir les
+        valeurs manuellement :
+      </p>
+      <div class="nucleo-manual-grid">
+        <label>Température (°C)<input type="number" step="0.1" id="man-temp" placeholder="21.4"/></label>
+        <label>Humidité (%)<input type="number" step="1" id="man-hum" placeholder="55"/></label>
+        <label>Pression (hPa)<input type="number" step="1" id="man-press" placeholder="1014"/></label>
+        <label>Vent (km/h)<input type="number" step="1" id="man-wind" placeholder="12"/></label>
+        <label>Précipitations (mm)<input type="number" step="0.1" id="man-prec" placeholder="0"/></label>
+      </div>
+      <button id="btn-nucleo-apply" class="source-btn" type="button" style="margin-top:1rem;">✅ Appliquer ces valeurs</button>
+    </div>
+  </section>
+
+  <hr class="divider" />
+
+  <!-- ══ HISTORIQUE ══ -->
+  <section>
+    <p class="section-tag reveal">Matériel</p>
+    <h2 class="section-title reveal">Le matériel & Logiciel<br/><em>utilisé pour cette station</em></h2>
+    <p class="section-body reveal">
+      Pour réussir ce projet de station météo, j'ai utilé du codage et certains outils pour simulé des compteurs météo.</p>
+    
+
+    <div class="timeline">
+      <div class="timeline-item reveal">
+        <p class="timeline-year">Visual Studio Code</p>
+        <p class="timeline-text">Application de <strong>programation</strong>, qui permet d'exécuter n'importe quelle language de code.</p>
+      </div>
+      <div class="timeline-item reveal">
+        <p class="timeline-year">NUCLEO-L476RG</p>
+        <p class="timeline-text">Outil permettant de simuler un <strong>thermomètre</strong> qui affichait la température et l'humidité.</p>
+      </div>
+      <div class="timeline-item reveal">
+        <p class="timeline-year">VitaScience</p>
+        <p class="timeline-text">Logiciel de <strong>programation</strong> permettant d'entrer un code dans le <strong>NUCLEO</strong> afin d'avoir de l'affichage.</p>
+      </div>
+    </div>
+  </section>
+
+  <hr class="divider" />
+
+  <!-- ══ PROBLEMES ══ -->
+  <section>
+    <p class="section-tag reveal">problèmes</p>
+    <h2 class="section-title reveal">Les problèmes<br/><em>rencontré</em></h2>
+    <p class="section-body reveal">
+      Dans cette station météo, j'ai souvent renconté des problèmes.</p>
+    
+
+    <div class="timeline">
+      <div class="timeline-item reveal">
+        <p class="timeline-year">Visual Studio Code</p>
+        <p class="timeline-text">J'ai rencontré pas mal de problèmes au niveau du <strong>développement</strong> juste avec des petites fautes de frappes, le dévellopement du site été pas mal impacté.</p>
+      </div>
+      <div class="timeline-item reveal">
+        <p class="timeline-year">NUCLEO-L476RG</p>
+        <p class="timeline-text">Cela pouvait beaucoup varié comme <strong>des erreurs d'importation</strong> ou <strong>mauvais branchement</strong> sur l'appareil.</p>
+      </div>
+      <div class="timeline-item reveal">
+        <p class="timeline-year">VitaScience</p>
+        <p class="timeline-text">J'ai rencontré les mêmes problèmes que sur <strong>Visual Studio</strong> et j'ai eu des soucis sur l'ordre des <strong>commandes</strong>.</p>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <p>Station Météo — Observer le Ciel &nbsp;·&nbsp; Données simulées à titre illustratif</p>
+</footer>
+
+<script>
+/* ── ANIMATED SKY CANVAS ── */
+(function() {
+  const canvas = document.getElementById('sky-canvas');
+  const ctx = canvas.getContext('2d');
+  let W, H, stars = [], clouds = [];
+
+  function resize() {
+    W = canvas.width  = window.innerWidth;
+    H = canvas.height = window.innerHeight;
+  }
+
+  function initStars() {
+    stars = Array.from({length: 120}, () => ({
+      x: Math.random() * W,
+      y: Math.random() * H * 0.7,
+      r: Math.random() * 1.4 + 0.3,
+      a: Math.random(),
+      da: (Math.random() - 0.5) * 0.005,
+    }));
+  }
+
+  function initClouds() {
+    clouds = Array.from({length: 5}, (_, i) => ({
+      x: (i / 5) * W * 1.4 - 100,
+      y: Math.random() * H * 0.35 + 20,
+      w: Math.random() * 180 + 100,
+      h: Math.random() * 40 + 20,
+      speed: Math.random() * 0.12 + 0.04,
+      alpha: Math.random() * 0.06 + 0.03,
+    }));
+  }
+
+  function draw(ts) {
+    ctx.clearRect(0, 0, W, H);
+
+    // gradient sky
+    const grad = ctx.createLinearGradient(0, 0, 0, H);
+    grad.addColorStop(0, '#0a1628');
+    grad.addColorStop(0.6, '#112244');
+    grad.addColorStop(1, '#1a2a50');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, W, H);
+
+    // stars
+    stars.forEach(s => {
+      s.a += s.da;
+      if (s.a < 0.1 || s.a > 1) s.da *= -1;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(200,230,255,${s.a})`;
+      ctx.fill();
+    });
+
+    // clouds
+    clouds.forEach(c => {
+      c.x += c.speed;
+      if (c.x > W + 200) c.x = -200;
+      ctx.beginPath();
+      ctx.ellipse(c.x, c.y, c.w, c.h, 0, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(180,210,240,${c.alpha})`;
+      ctx.fill();
+    });
+
+    requestAnimationFrame(draw);
+  }
+
+  window.addEventListener('resize', () => { resize(); initStars(); });
+  resize(); initStars(); initClouds();
+  requestAnimationFrame(draw);
+})();
+
+/* ── INSTRUMENT COUNTERS ── */
+function animCount(id, target, decimals) {
+  const el = document.getElementById(id);
+  let start = null;
+  const duration = 1800;
+  function step(ts) {
+    if (!start) start = ts;
+    const p = Math.min((ts - start) / duration, 1);
+    const val = target * p;
+    el.textContent = val.toFixed(decimals);
+    if (p < 1) requestAnimationFrame(step);
+    else el.textContent = target.toFixed(decimals);
+  }
+  requestAnimationFrame(step);
+}
+
+/* ── SOURCE DE DONNÉES : API géolocalisée ou carte NUCLEO ── */
+let currentSource = 'api';      // 'api' | 'nucleo'
+let userCoords = null;          // { latitude, longitude }
+let apiRefreshTimer = null;
+
+function appliquerMesures({ temp, hum, press, wind, prec }) {
+  if (temp  != null) animCount('cnt-temp',  temp,  1);
+  if (hum   != null) animCount('cnt-hum',   hum,   0);
+  if (press != null) animCount('cnt-press', press, 0);
+  if (wind  != null) animCount('cnt-wind',  wind,  0);
+  if (prec  != null) animCount('cnt-prec',  prec,  1);
+}
+
+function localiserUtilisateur() {
+  const statusEl = document.getElementById('geo-status');
+
+  return new Promise((resolve) => {
+    if (!('geolocation' in navigator)) {
+      statusEl.textContent = "Géolocalisation indisponible sur ce navigateur — position de repli : Paris.";
+      resolve({ latitude: 48.8566, longitude: 2.3522, fallback: true });
+      return;
+    }
+
+    statusEl.textContent = "Localisation en cours…";
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const { latitude, longitude } = pos.coords;
+        statusEl.textContent = `Position détectée · ${latitude.toFixed(3)}°, ${longitude.toFixed(3)}°`;
+        resolve({ latitude, longitude, fallback: false });
+      },
+      (err) => {
+        statusEl.textContent = "Localisation refusée ou indisponible — position de repli : Paris.";
+        resolve({ latitude: 48.8566, longitude: 2.3522, fallback: true });
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+    );
+  });
+}
+
+async function chargerMeteoAPI() {
+  if (currentSource !== 'api') return;
+  if (!userCoords) userCoords = await localiserUtilisateur();
+
+  const { latitude, longitude } = userCoords;
+
+  // En France métropolitaine, on force le modèle AROME de Météo-France
+  // (résolution ~1-2 km) au lieu du modèle global par défaut (~11-25 km),
+  // ce qui colle beaucoup mieux à la position réelle.
+  const enFranceMetro =
+    latitude >= 41 && latitude <= 51.5 && longitude >= -5.5 && longitude <= 9.8;
+
+  const modeleParam = enFranceMetro ? '&models=meteofrance_arome_france_hd' : '';
+
+  const url =
+    `https://api.open-meteo.com/v1/forecast?latitude=${latitude.toFixed(5)}&longitude=${longitude.toFixed(5)}` +
+    `&current=temperature_2m,relative_humidity_2m,surface_pressure,wind_speed_10m,precipitation` +
+    `&cell_selection=nearest${modeleParam}`;
+
+  try {
+    const response = await fetch(url);
+    const data = await response.json();
+
+    appliquerMesures({
+      temp:  data.current.temperature_2m,
+      hum:   data.current.relative_humidity_2m,
+      press: data.current.surface_pressure,
+      wind:  data.current.wind_speed_10m,
+      prec:  data.current.precipitation,
+    });
+  } catch (err) {
+    console.error("Erreur météo :", err);
+    document.getElementById('geo-status').textContent = "Erreur lors de la récupération des données météo.";
+  }
+}
+
+/* ── BASCULE ENTRE LES DEUX SOURCES ── */
+const btnSourceApi    = document.getElementById('btn-source-api');
+const btnSourceNucleo = document.getElementById('btn-source-nucleo');
+const nucleoPanel     = document.getElementById('nucleo-panel');
+const geoStatusEl     = document.getElementById('geo-status');
+
+function setSource(source) {
+  currentSource = source;
+
+  if (source === 'api') {
+    btnSourceApi.classList.add('active');
+    btnSourceNucleo.classList.remove('active');
+    nucleoPanel.hidden = true;
+    geoStatusEl.hidden = false;
+
+    chargerMeteoAPI();
+    if (!apiRefreshTimer) {
+      apiRefreshTimer = setInterval(chargerMeteoAPI, 600000); // toutes les 10 min
+    }
+  } else {
+    btnSourceNucleo.classList.add('active');
+    btnSourceApi.classList.remove('active');
+    nucleoPanel.hidden = false;
+    geoStatusEl.hidden = true;
+
+    if (apiRefreshTimer) { clearInterval(apiRefreshTimer); apiRefreshTimer = null; }
+  }
+}
+
+btnSourceApi.addEventListener('click', () => setSource('api'));
+btnSourceNucleo.addEventListener('click', () => setSource('nucleo'));
+
+/* ── NUCLEO L476RG : CONNEXION WEB SERIAL ── */
+let serialPort = null;
+let serialReader = null;
+const nucleoConnectBtn = document.getElementById('btn-nucleo-connect');
+const nucleoConnStatus = document.getElementById('nucleo-conn-status');
+
+async function connecterNucleo() {
+  if (!('serial' in navigator)) {
+    nucleoConnStatus.textContent = "Web Serial non supportée — utilisez Chrome/Edge, ou la saisie manuelle ci-dessous.";
+    return;
+  }
+
+  try {
+    serialPort = await navigator.serial.requestPort();
+    await serialPort.open({ baudRate: 115200 });
+
+    nucleoConnStatus.textContent = "Connectée — lecture en cours…";
+    nucleoConnStatus.classList.add('connected');
+
+    const textDecoder = new TextDecoderStream();
+    serialPort.readable.pipeTo(textDecoder.writable);
+    serialReader = textDecoder.readable.getReader();
+
+    let buffer = '';
+    while (true) {
+      const { value, done } = await serialReader.read();
+      if (done) break;
+      buffer += value;
+
+      let nl;
+      while ((nl = buffer.indexOf('\n')) >= 0) {
+        const line = buffer.slice(0, nl).trim();
+        buffer = buffer.slice(nl + 1);
+        if (!line) continue;
+
+        try {
+          const mesure = JSON.parse(line);
+          appliquerMesures({
+            temp:  mesure.temp,
+            hum:   mesure.hum,
+            press: mesure.press,
+            wind:  mesure.wind,
+            prec:  mesure.prec,
+          });
+        } catch (e) {
+          // Ligne non-JSON reçue de la carte : on l'ignore silencieusement
+        }
+      }
+    }
+  } catch (err) {
+    console.error("Erreur Web Serial :", err);
+    nucleoConnStatus.textContent = "Connexion annulée ou échouée.";
+    nucleoConnStatus.classList.remove('connected');
+  }
+}
+
+nucleoConnectBtn.addEventListener('click', connecterNucleo);
+
+/* ── NUCLEO L476RG : SAISIE MANUELLE (repli sans Web Serial) ── */
+document.getElementById('btn-nucleo-apply').addEventListener('click', () => {
+  const v = (id) => {
+    const raw = document.getElementById(id).value;
+    return raw === '' ? null : parseFloat(raw);
+  };
+  appliquerMesures({
+    temp:  v('man-temp'),
+    hum:   v('man-hum'),
+    press: v('man-press'),
+    wind:  v('man-wind'),
+    prec:  v('man-prec'),
+  });
+});
+
+window.addEventListener('load', () => {
+  setSource('api');
+});
+
+/* ── SCROLL REVEAL ── */
+const observer = new IntersectionObserver(entries => {
+  entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
+}, { threshold: 0.12 });
+
+document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+</script>
+</body>
+</html>
